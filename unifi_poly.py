@@ -4,7 +4,7 @@
 This is a NodeServer for Unifi Device Detection written by automationgeek (Jean-Francois Tremblay)
 based on the NodeServer template for Polyglot v2 written in Python2/3 by Einstein.42 (James Milne) milne.james@gmail.com
 """
-import polyinterface
+import udi_interface
 import hashlib
 import warnings 
 import time
@@ -15,7 +15,7 @@ from urllib.parse import quote
 from pushover import init, Client
 from unifi_api_controller import Controller as unifictl
 
-LOGGER = polyinterface.LOGGER
+LOGGER = udi_interface.LOGGER
 SERVERDATA = json.load(open('server.json'))
 VERSION = SERVERDATA['credits'][0]['version']
 
@@ -30,10 +30,11 @@ def get_profile_info(logger):
     f.close()
     return { 'version': pv }
 
-class Controller(polyinterface.Controller):
+class Controller(udi_interface.Node):
 
-    def __init__(self, polyglot):
-        super(Controller, self).__init__(polyglot)
+    def __init__(self, polyglot, primary, address, name):
+        super(Controller, self).__init__(polyglot, primary, address, name)
+        self.poly = polyglot
         self.name = 'UnifiCtrl'
         self.queryON = False
         self.hb = 0
@@ -48,73 +49,83 @@ class Controller(polyinterface.Controller):
         self.lstUsers = []
         self.ctrl = None
 
-    def start(self):
-        LOGGER.info('Started Unifi for v2 NodeServer version %s', str(VERSION))
-        self.setDriver('ST', 0)
+        polyglot.subscribe(polyglot.START, self.start, address)
+        polyglot.subscribe(polyglot.CUSTOMPARAMS, self.parameterHandler)
+        polyglot.subscribe(polyglot.POLL, self.poll)
+
+        polyglot.ready()
+        polyglot.addNode(self)
+
+    def parameterHandler(self, params):
+        self.poly.Notices.clear()
         try:
-            if 'unifi_host' in self.polyConfig['customParams']:
-                self.unifi_host = self.polyConfig['customParams']['unifi_host']
+            if 'unifi_host' in params:
+                self.unifi_host = params['unifi_host']
             else:
                 self.unifi_host = ""
                 
-            if 'unifi_port' in self.polyConfig['customParams']:
-                self.unifi_port = self.polyConfig['customParams']['unifi_port']
+            if 'unifi_port' in params:
+                self.unifi_port = params['unifi_port']
             else:
                 self.unifi_port = "8443"    
             
-            if 'unifi_userid' in self.polyConfig['customParams']:
-                self.unifi_userid = self.polyConfig['customParams']['unifi_userid']
+            if 'unifi_userid' in params:
+                self.unifi_userid = params['unifi_userid']
             else:
                 self.unifi_userid = ""
             
-            if 'unifi_password' in self.polyConfig['customParams']:
-                self.unifi_password = self.polyConfig['customParams']['unifi_password']
+            if 'unifi_password' in params:
+                self.unifi_password = params['unifi_password']
             else:
                 self.unifi_password = ""
             
-            if 'unifi_siteid' in self.polyConfig['customParams']:
-                self.unifi_siteid = self.polyConfig['customParams']['unifi_siteid']
+            if 'unifi_siteid' in params:
+                self.unifi_siteid = params['unifi_siteid']
             else:
                 self.unifi_siteid = "default"              
             
-            if 'poToken' in self.polyConfig['customParams']:
-                self.poToken = self.polyConfig['customParams']['poToken']
+            if 'poToken' in params:
+                self.poToken = params['poToken']
             else:
                 self.poToken = ""
 
-            if 'poUserKey' in self.polyConfig['customParams']:
-                self.poUserKey = self.polyConfig['customParams']['poUserKey']
+            if 'poUserKey' in params:
+                self.poUserKey = params['poUserKey']
             else:
                 self.poUserKey = ""
       
-            if 'mac_device' in self.polyConfig['customParams']:
-                self.mac_device = self.polyConfig['customParams']['mac_device']
+            if 'mac_device' in params:
+                self.mac_device = params['mac_device']
             else:
                 self.mac_device = ""      
           
             if self.unifi_host == "" or self.unifi_userid == "" or self.unifi_password == "" or self.mac_device == "" :
+                self.poly.Notices['cfg'] = 'Unifi requires \'unifi_host\' \'unifi_userid\' \'unifi_password\' \'mac_device\' parameters to be specified.'
                 LOGGER.error('Unifi requires \'unifi_host\' \'unifi_userid\' \'unifi_password\' \'mac_device\' parameters to be specified in custom configuration.')
                 return False
             else:
-                self.check_profile()
                 self.discover()
                 
         except Exception as ex:
             LOGGER.error('Error starting Unifi NodeServer: %s', str(ex))
+
+    def start(self):
+        LOGGER.info('Started Unifi for v3 NodeServer version %s', str(VERSION))
+        self.setDriver('ST', 0)
            
-    def shortPoll(self):
-        self.setDriver('ST', 1)
-        for node in self.nodes:
-            if  self.nodes[node].queryON == True :
-                self.nodes[node].update()
-                
-    def longPoll(self):
-        #self._newUsers()
-        self.heartbeat()
+    def poll(self, polltype):
+        if 'shortPoll' in polltype:
+            self.setDriver('ST', 1)
+            for node in self.poly.nodes():
+                if  node.queryON == True :
+                    node.update()
+        else:
+            #self._newUsers()
+            self.heartbeat()
         
     def query(self):
-        for node in self.nodes:
-            self.nodes[node].reportDrivers()
+        for node in self.poly.nodes():
+            node.reportDrivers()
 
     def heartbeat(self):
         LOGGER.debug('heartbeat: hb={}'.format(self.hb))
@@ -134,31 +145,12 @@ class Controller(polyinterface.Controller):
             
         for netdevice in self.mac_device.split(','):
             name =  netdevice.replace(":","") 
-            self.addNode(NetDevice(self,self.address,name,name,self.ctrl,netdevice ))
+            if not self.poly.getNode(name):
+                self.poly.addNode(NetDevice(self.poly,self.address,name,name,self.ctrl,netdevice ))
 
     def delete(self):
         LOGGER.info('Deleting Unifi')
 
-    def check_profile(self):
-        self.profile_info = get_profile_info(LOGGER)
-        # Set Default profile version if not Found
-        cdata = deepcopy(self.polyConfig['customData'])
-        LOGGER.info('check_profile: profile_info={0} customData={1}'.format(self.profile_info,cdata))
-        if not 'profile_info' in cdata:
-            cdata['profile_info'] = { 'version': 0 }
-        if self.profile_info['version'] == cdata['profile_info']['version']:
-            self.update_profile = False
-        else:
-            self.update_profile = True
-            self.poly.installprofile()
-        LOGGER.info('check_profile: update_profile={}'.format(self.update_profile))
-        cdata['profile_info'] = self.profile_info
-        self.saveCustomData(cdata)
-
-    def install_profile(self,command):
-        LOGGER.info("install_profile:")
-        self.poly.installprofile()
-    
     def _newUsers(self):
         lstCurUsers = []
         for user in self.ctrl.get_users() :
@@ -181,11 +173,10 @@ class Controller(polyinterface.Controller):
     commands = {
         'QUERY': query,
         'DISCOVER': discover,
-        'INSTALL_PROFILE': install_profile,
     }
     drivers = [{'driver': 'ST', 'value': 1, 'uom': 2}]
 
-class NetDevice(polyinterface.Node):
+class NetDevice(udi_interface.Node):
 
     def __init__(self, controller, primary, address, name,ctrl, mac):
 
@@ -193,6 +184,8 @@ class NetDevice(polyinterface.Node):
         self.queryON = True
         self.deviceMac = mac
         self.unifiCtrl = ctrl
+
+        controller.subscribe(controller.START, self.start, address)
 
     def start(self):
         self.update()
@@ -219,9 +212,11 @@ class NetDevice(polyinterface.Node):
 
 if __name__ == "__main__":
     try:
-        polyglot = polyinterface.Interface('UnifiNodeServer')
+        polyglot = udi_interface.Interface([])
         polyglot.start()
-        control = Controller(polyglot)
-        control.runForever()
+        polyglot.updateProfile()
+        polyglot.setCustomParamsDoc()
+        Controller(polyglot, 'controller', 'controller', 'UnifiNodeServer')
+        polyglot.runForever()
     except (KeyboardInterrupt, SystemExit):
         sys.exit(0)

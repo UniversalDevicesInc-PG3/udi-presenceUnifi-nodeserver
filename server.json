@@ -1,21 +1,30 @@
 {
     "name": "UnifiPresence",
-    "docs": "https://github.com/therealmysteryman/udi-presenceUnifi-polyglot/blob/master/README.md",
+    "docs": "https://github.com/UniversalDevicesInc-PG3/udi-presenceUnifi-polyglot/blob/master/README.md",
     "type": "python3",
     "executable": "unifi_poly.py",
     "install": "install.sh",
     "shortPoll": "90",
     "longPoll": "600",
     "description": "UniFi Device Network Presence Detection.",
-    "notice": "https://github.com/therealmysteryman/udi-presenceUnifi-polyglot/blob/master/LICENSE",
+    "notice": "https://github.com/UniversalDevicesInc-PG3/udi-presenceUnifi-polyglot/blob/master/LICENSE",
+	"logLevel": "INFO",
+	"customParams": {
+    	"unifi_host": "",
+    	"unifi_port": "",
+    	"unifi_userid": "",
+    	"unifi_password": "",
+    	"unifi_siteid": "",
+    	"mac_device": ""
+	},
     "credits": [
         {
-            "title": "UnifiPresence: A Polyglot v2 interface to Unifi Controller",
+            "title": "UnifiPresence: A Polyglot v3 interface to Unifi Controller",
             "author": "AutomationGeek",
-            "version": "2.0.1",
-            "date": "February 12, 2021",
-            "source": "https://github.com/therealmysteryman/udi-presenceUnifi-polyglot",
-            "license": "https://github.com/therealmysteryman/udi-presenceUnifi-polyglot/blob/master/README.md"
+            "version": "3.0.0",
+            "date": "October 20, 2021",
+            "source": "https://github.com/UniversalDevicesInc-PG3/udi-presenceUnifi-polyglot",
+            "license": "https://github.com/UniversalDevicesInc-PG3/udi-presenceUnifi-polyglot/blob/master/README.md"
         },
 	{
             "title": "udi-poly-template-python: A Polyglot v2 Poly template",
@@ -25,5 +34,14 @@
             "source": "https://github.com/Einstein42/udi-poly-template-python",
             "license": "https://raw.githubusercontent.com/Einstein42/udi-poly-template-python/master/LICENSE"
         }
-    ]
+    ],
+    "store": {
+        "developer": "bpaauwe@bobsplace.com",
+        "purchaseOptions": [
+            {
+                "isPerpetual": true,
+                "price": 0
+            }
+        ]
+    }
 }
