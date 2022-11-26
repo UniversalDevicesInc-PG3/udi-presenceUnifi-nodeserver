@@ -12,7 +12,7 @@ import json
 import sys
 from copy import deepcopy
 from urllib.parse import quote
-from pushover import init, Client
+#from pushover import init, Client
 from unifi_api_controller import Controller as unifictl
 
 LOGGER = udi_interface.LOGGER
