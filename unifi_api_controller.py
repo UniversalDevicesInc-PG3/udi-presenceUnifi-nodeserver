@@ -27,12 +27,13 @@ class APIError(Exception):
 
 def retry_login(func, *args, **kwargs):
     """To reattempt login if requests exception(s) occur at time of call"""
+    from requests.exceptions import HTTPError, RequestException
+
     def wrapper(*args, **kwargs):
         try:
             try:
                 return func(*args, **kwargs)
-            except (requests.exceptions.RequestException,
-                    APIError) as err:
+            except (RequestException, HTTPError, APIError) as err:
                 log.warning("Failed to perform %s due to %s" % (func, err))
                 controller = args[0]
                 controller._login()
@@ -185,6 +186,10 @@ class Controller(object):
         self.session = requests.Session()
         self.session.verify = ssl_verify
         
+        self.session.hooks = {
+            'response': lambda r, *args, **kwargs: r.raise_for_status()
+        }
+        
         self.load_dpi_from_file()
 
         log.debug('Controller for %s', self.url)
@@ -243,7 +248,7 @@ class Controller(object):
             login_url = self.url + 'api/login'
 
         r = self.session.post(login_url, json=params)
-        if r.status_code is not 200:
+        if r.status_code !=  200:
             raise APIError("Login failed - status code: %i" % r.status_code)
 
     def _logout(self):
